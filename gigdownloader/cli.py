@@ -2,8 +2,8 @@
 """
 GigDownloader
 =============
-One downloader for YouTube, Facebook, Instagram, X (Twitter), TikTok and
-Threads - powered by yt-dlp. Works the same on Windows, macOS, Linux and
+One downloader for YouTube, Facebook, Instagram, X (Twitter), TikTok,
+Threads and Pinterest - powered by yt-dlp. Works the same on Windows, macOS, Linux and
 Termux (Android).
 
     gig                     start (paste links one after another)
@@ -29,12 +29,15 @@ country.
 
 import argparse
 import functools
+from html.parser import HTMLParser
 import importlib.util
 import os
 import re
 import shutil
 import subprocess
 import sys
+from urllib.parse import urljoin
+from urllib.request import Request, urlopen
 from pathlib import Path
 
 from gigdownloader import __version__
@@ -130,6 +133,11 @@ PLATFORMS = {
     "Threads": (
         re.compile(r"(https?://)?(www\.)?threads\.(net|com)/\S+", re.I),
         _c("1;38;5;82"),
+    ),
+    "Pinterest": (
+        re.compile(r"(https?://)?((www|m)\.)?pinterest\.com/\S+|"
+                   r"(https?://)?pin\.it/\S+", re.I),
+        _c("1;38;5;196"),
     ),
 }
 
@@ -358,6 +366,43 @@ def probe_video(url: str, platform_name: str) -> dict:
         return ydl.extract_info(url, download=False)
 
 
+class _PinterestImageParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.image = None
+
+    def handle_starttag(self, tag, attrs):
+        if tag.lower() != "meta":
+            return
+        attrs = dict(attrs)
+        if attrs.get("property", "").lower() in ("og:image", "og:image:secure_url"):
+            self.image = attrs.get("content") or self.image
+
+
+def download_pinterest_image(url: str, videos_dir: Path):
+    """Fallback for image pins when yt-dlp's Pinterest extractor has no video formats."""
+    request = Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    with urlopen(request, timeout=20) as response:
+        page = response.read(2_000_000).decode("utf-8", errors="replace")
+    parser = _PinterestImageParser()
+    parser.feed(page)
+    if not parser.image:
+        return None
+
+    image_url = urljoin(url, parser.image)
+    image_request = Request(image_url, headers={"User-Agent": "Mozilla/5.0", "Referer": url})
+    with urlopen(image_request, timeout=30) as response:
+        content_type = response.headers.get_content_type()
+        if not content_type.startswith("image/"):
+            return None
+        extension = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}.get(content_type, ".img")
+        match = re.search(r"/pin/(\d+)", url)
+        filename = f"Pinterest-{match.group(1) if match else 'pin'}{extension}"
+        destination = videos_dir / filename
+        destination.write_bytes(response.read())
+    return destination
+
+
 def available_qualities(video: dict):
     """(height, label) for each ladder step this video really has, best first."""
     formats = video.get("formats", [])
@@ -553,7 +598,7 @@ def check(args) -> None:
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(
         prog="gig",
-        description=f"{APP_NAME} - YouTube, Facebook, Instagram, X, TikTok and Threads downloader",
+        description=f"{APP_NAME} - YouTube, Facebook, Instagram, X, TikTok, Threads and Pinterest downloader",
     )
     parser.add_argument("url", nargs="?", help="video link (optional)")
     parser.add_argument("-o", "--output", metavar="DIR",
@@ -600,6 +645,14 @@ def run(args) -> None:
         try:
             video = probe_video(url, platform_name)
         except yt_dlp.utils.DownloadError as exc:
+            if platform_name == "Pinterest":
+                try:
+                    saved_image = download_pinterest_image(url, videos_dir)
+                    if saved_image:
+                        print(f"\n{GREEN}[✔] Image pin saved: {saved_image}{RESET}")
+                        continue
+                except Exception:
+                    pass
             explain_error(exc, platform_name)
             continue
 
