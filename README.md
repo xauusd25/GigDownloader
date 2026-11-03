@@ -4,15 +4,6 @@
 
 ### Desktop
 ##### (MacOS & Linux)
-If you have [Homebrew](https://brew.sh/) on macOS:
-
-```bash
-brew tap xauusd25/gig https://github.com/xauusd25/GigDownloader
-brew install gig
-
-```
-
-> **Note:** If Homebrew prompts for tap verification on initial install, run `brew trust xauusd25/gig`.
 
 Direct install via Terminal (macOS & Linux, no package manager needed):
 
@@ -22,13 +13,6 @@ curl -fsSL https://raw.githubusercontent.com/xauusd25/GigDownloader/main/install
 ```
 
 ##### (Windows)
-If you have [Scoop](https://scoop.sh/):
-```powershell
-scoop bucket add gig https://github.com/xauusd25/GigDownloader
-scoop install gig
-
-```
-
 
 Direct install via PowerShell (no package manager needed):
 ```powershell
