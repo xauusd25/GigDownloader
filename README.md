@@ -28,6 +28,7 @@ irm https://raw.githubusercontent.com/xauusd25/GigDownloader/main/install.ps1 | 
 ### Termux (Android)
 
 ```bash
+pkg update && yes | pkg upgrade
 termux-setup-storage
 curl -fsSL https://raw.githubusercontent.com/xauusd25/GigDownloader/main/install.sh | bash
 
